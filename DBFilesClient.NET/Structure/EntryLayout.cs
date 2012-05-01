@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Collections;
+using System.Reflection;
 
 namespace DBFilesClient.NET.Structure
 {
@@ -49,8 +52,8 @@ namespace DBFilesClient.NET.Structure
             if (fmt == null)
                 throw new ArgumentNullException("fmt");
 
-            m_elements = new List<LayoutElement>(fmt.Length);
             int length = fmt.Length;
+            m_elements = new List<LayoutElement>(length);
             for (int i = 0; i < length; i++)
 			{
                 char c = fmt[i];
@@ -80,9 +83,86 @@ namespace DBFilesClient.NET.Structure
             }
         }
 
-        public EntryLayout(ICollection<LayoutElement> elements)
+        public EntryLayout(IList<LayoutElement> elements)
         {
-            throw new NotImplementedException();
+            if (elements == null)
+                throw new ArgumentNullException("fmt");
+
+            int length = elements.Count;
+            m_elements = new List<LayoutElement>(length);
+            for (int i = 0; i < length; i++)
+            {
+                var e = elements[i];
+
+                switch (e)
+                {
+                    case LayoutElement.String:
+                    case LayoutElement.DoubleWord:
+                        this.AddElement(e);
+                        break;
+                    default:
+                        throw new ArgumentException("Invalid element '" + e + "'.");
+                }
+            }
+        }
+
+        public EntryLayout(Type entryType)
+        {
+            if (entryType == null)
+                throw new ArgumentNullException("entryType");
+
+            if (!entryType.IsValueType)
+                throw new ArgumentException("entryType must be a value type.");
+
+            // We should be able to take a pointer to our type.
+            try
+            {
+                entryType.MakePointerType();
+            }
+            catch (Exception e)
+            {
+                throw new ArgumentException("Cannot take a pointer to entryType.", e);
+            }
+
+            var fields = entryType.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            var length = fields.Length;
+            if (length == 0)
+                throw new ArgumentException("No fields found for entryType.");
+
+            m_elements = new List<LayoutElement>(length);
+
+            for (int i = 0; i < length; ++i)
+            {
+                var field = fields[i];
+                var type = field.FieldType;
+
+                if (!type.IsValueType)
+                    throw new ArgumentException("Field " + field.Name + " must be a value type.");
+
+                // We should be able to take a pointer to field type.
+                try
+                {
+                    type.MakePointerType();
+                }
+                catch (Exception e)
+                {
+                    throw new ArgumentException("Cannot take a pointer to field " + field.Name + ".", e);
+                }
+
+                if (type == typeof(CString))
+                    this.AddElement(LayoutElement.String);
+                else
+                {
+                    switch (Marshal.SizeOf(type))
+                    {
+                        case 4:
+                            this.AddElement(LayoutElement.DoubleWord);
+                            break;
+                        default:
+                            throw new ArgumentException("Unknown field " + field.Name + ".");
+                    }
+                }
+            }
         }
         #endregion
 
@@ -123,9 +203,13 @@ namespace DBFilesClient.NET.Structure
         /// Fixes the <see cref="DBFilesClient.NET.Structure.EntryLayout"/>
         /// so it can no longer be changed.
         /// </summary>
-        public void Fix()
+        /// <returns>
+        /// The current instance.
+        /// </returns>
+        public EntryLayout Fix()
         {
             m_fixed = true;
+            return this;
         }
 
         /// <summary>

@@ -32,7 +32,7 @@ namespace DBFilesClient.NET
         bool m_disposed;
         #endregion
 
-        #region Constructor
+        #region Constructors
         public DBCStorage(EntryLayout layout)
         {
             if (IntPtr.Size != sizeof(uint))
@@ -51,6 +51,21 @@ namespace DBFilesClient.NET
             }
             else
                 m_layout = layout;
+        }
+
+        public DBCStorage(string fmt)
+            : this(new EntryLayout(fmt).Fix())
+        {
+        }
+
+        public DBCStorage(Type entryType)
+            : this(new EntryLayout(entryType).Fix())
+        {
+        }
+
+        public DBCStorage(IList<LayoutElement> elements)
+            : this(new EntryLayout(elements).Fix())
+        {
         }
         #endregion
 
