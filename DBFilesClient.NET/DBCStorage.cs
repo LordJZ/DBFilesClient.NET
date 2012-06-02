@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -6,15 +7,15 @@ using System.Reflection.Emit;
 
 namespace DBFilesClient.NET
 {
-    public sealed class DBCStorage<T> : StorageBase<T> where T : class, new()
+    public class DBCStorage<T> : Storage<T>, IEnumerable<T> where T : class, new()
     {
         #region Loading Information
-        ConstructorInfo m_ctor;
-        bool m_haveString;
-        bool m_haveLazyCString;
+        internal ConstructorInfo m_ctor;
+        internal bool m_haveString;
+        internal bool m_haveLazyCString;
 
-        unsafe delegate void EntryLoader(byte* data, byte[] pool, sbyte* pinnedPool, T entry, bool ignoreLazyCStrings);
-        EntryLoader m_loadMethod;
+        internal unsafe delegate void EntryLoader(byte* data, byte[] pool, sbyte* pinnedPool, T entry, bool ignoreLazyCStrings);
+        internal EntryLoader m_loadMethod;
         #endregion
 
         #region Constructor
@@ -118,7 +119,7 @@ namespace DBFilesClient.NET
         #endregion
 
         #region Generating Methods
-        void EmitLoadField(ILGenerator ilgen, FieldInfo field, StoredTypeId id, bool lastField)
+        internal void EmitLoadField(ILGenerator ilgen, FieldInfo field, StoredTypeId id, bool lastField)
         {
             //             0            1            2             3           4
             // args: byte* data, byte[] pool, sbyte* pinnedPool, T entry, bool ignoreLazyCStrings
@@ -183,7 +184,7 @@ namespace DBFilesClient.NET
             }
         }
 
-        void EmitLoadProperty(ILGenerator ilgen, PropertyInfo property, MethodInfo setter, StoredTypeId id, bool lastField)
+        internal void EmitLoadProperty(ILGenerator ilgen, PropertyInfo property, MethodInfo setter, StoredTypeId id, bool lastField)
         {
             //             0            1            2             3           4
             // args: byte* data, byte[] pool, sbyte* pinnedPool, T entry, bool ignoreLazyCStrings
@@ -253,7 +254,7 @@ namespace DBFilesClient.NET
             }
         }
 
-        void GenerateLoadMethod()
+        internal void GenerateLoadMethod()
         {
             if (m_loadMethod != null)
                 return;
@@ -309,7 +310,7 @@ namespace DBFilesClient.NET
         /// <param name="stream">
         /// The <see cref="System.IO.Stream"/> from which the storage should be loaded.
         /// </param>
-        public override void Load(Stream stream)
+        public sealed override void Load(Stream stream)
         {
             Load(stream, LoadFlags.None);
         }
@@ -323,7 +324,7 @@ namespace DBFilesClient.NET
         /// <param name="flags">
         /// The <see cref="DBFilesClient.NET.LoadFlags"/> to be used when loading.
         /// </param>
-        public unsafe void Load(Stream stream, LoadFlags flags)
+        public unsafe virtual void Load(Stream stream, LoadFlags flags)
         {
             GenerateLoadMethod();
 
@@ -365,19 +366,8 @@ namespace DBFilesClient.NET
             {
                 byte* pdata = pdata_;
 
-                uint min, max;
                 if (m_records > 0)
-                {
-                    min = *(uint*)pdata;
-                    max = *(uint*)(pdata + m_entrySize * (m_records - 1));
-                }
-                else
-                {
-                    min = 0;
-                    max = 0;
-                }
-
-                this.Resize(min, max);
+                    this.Resize(*(uint*)pdata, *(uint*)(pdata + m_entrySize * (m_records - 1)));
 
                 fixed (byte* ppool = m_haveString ? pool : null)
                 {

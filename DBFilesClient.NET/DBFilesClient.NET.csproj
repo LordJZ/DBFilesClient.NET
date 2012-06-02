@@ -64,6 +64,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DB2Header.cs" />
+    <Compile Include="DB2Storage.cs" />
     <Compile Include="LazyCString.cs" />
     <Compile Include="DBCHeader.cs" />
     <Compile Include="LoadFlags.cs" />

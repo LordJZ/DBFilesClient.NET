@@ -8,16 +8,16 @@ using System.Reflection.Emit;
 
 namespace DBFilesClient.NET
 {
-    public abstract class StorageBase<T> : IDictionary<uint, T>, ICollection<T> where T : class, new()
+    public abstract class Storage<T> : IDictionary<uint, T>, ICollection<T> where T : class, new()
     {
         #region Enumerator
         public struct Enumerator : IEnumerator<T>, IEnumerator<KeyValuePair<uint, T>>, IEnumerator
         {
-            StorageBase<T> m_storage;
+            Storage<T> m_storage;
             int m_version;
             uint m_id;
 
-            internal Enumerator(StorageBase<T> storage)
+            internal Enumerator(Storage<T> storage)
             {
                 if (storage == null)
                     throw new ArgumentNullException("storage");
@@ -33,7 +33,7 @@ namespace DBFilesClient.NET
             void CheckStorage()
             {
                 if (m_storage == null)
-                    throw new ObjectDisposedException("StorageEnumerator");
+                    throw new ObjectDisposedException("Enumerator");
 
                 if (m_storage.m_version != m_version)
                     throw new InvalidOperationException("The storage has been modified.");
@@ -118,11 +118,11 @@ namespace DBFilesClient.NET
             #region Enumerator
             public struct Enumerator : IEnumerator<uint>
             {
-                StorageBase<T> m_storage;
+                Storage<T> m_storage;
                 int m_version;
                 uint m_id;
 
-                internal Enumerator(StorageBase<T> storage)
+                internal Enumerator(Storage<T> storage)
                 {
                     if (storage == null)
                         throw new ArgumentNullException("storage");
@@ -138,7 +138,7 @@ namespace DBFilesClient.NET
                 void CheckStorage()
                 {
                     if (m_storage == null)
-                        throw new ObjectDisposedException("StorageEnumerator");
+                        throw new ObjectDisposedException("Enumerator");
 
                     if (m_storage.m_version != m_version)
                         throw new InvalidOperationException("The storage has been modified.");
@@ -201,9 +201,9 @@ namespace DBFilesClient.NET
             }
             #endregion
 
-            StorageBase<T> m_storage;
+            Storage<T> m_storage;
 
-            public KeyCollection(StorageBase<T> storage)
+            public KeyCollection(Storage<T> storage)
             {
                 if (storage == null)
                     throw new ArgumentNullException("storage");
@@ -214,7 +214,7 @@ namespace DBFilesClient.NET
             void CheckStorage()
             {
                 if (m_storage == null)
-                    throw new ObjectDisposedException("StorageEnumerator");
+                    throw new ObjectDisposedException("Enumerator");
             }
 
             public bool IsReadOnly { get { return true; } }
@@ -272,6 +272,88 @@ namespace DBFilesClient.NET
             }
 
             IEnumerator<uint> IEnumerable<uint>.GetEnumerator()
+            {
+                return this.GetEnumerator();
+            }
+
+            IEnumerator IEnumerable.GetEnumerator()
+            {
+                return this.GetEnumerator();
+            }
+
+            public void Dispose()
+            {
+                m_storage = null;
+            }
+        }
+        #endregion
+
+        #region ValueCollection
+        public struct ValueCollection : ICollection<T>, IDisposable
+        {
+            Storage<T> m_storage;
+
+            public ValueCollection(Storage<T> storage)
+            {
+                if (storage == null)
+                    throw new ArgumentNullException("storage");
+
+                m_storage = storage;
+            }
+
+            void CheckStorage()
+            {
+                if (m_storage == null)
+                    throw new ObjectDisposedException("Enumerator");
+            }
+
+            public bool IsReadOnly { get { return true; } }
+
+            public int Count
+            {
+                get
+                {
+                    CheckStorage();
+
+                    return m_storage.m_records;
+                }
+            }
+
+            void ICollection<T>.Add(T item)
+            {
+                throw new NotSupportedException();
+            }
+
+            bool ICollection<T>.Remove(T item)
+            {
+                throw new NotSupportedException();
+            }
+
+            void ICollection<T>.Clear()
+            {
+                throw new NotSupportedException();
+            }
+
+            public bool Contains(T entry)
+            {
+                CheckStorage();
+
+                return m_storage.Contains(entry);
+            }
+
+            public void CopyTo(T[] array, int index)
+            {
+                CheckStorage();
+
+                m_storage.CopyTo(array, index);
+            }
+
+            public Enumerator GetEnumerator()
+            {
+                return new Enumerator(m_storage);
+            }
+
+            IEnumerator<T> IEnumerable<T>.GetEnumerator()
             {
                 return this.GetEnumerator();
             }
@@ -363,9 +445,9 @@ namespace DBFilesClient.NET
 
         #region Constructor
         /// <summary>
-        /// Initializes a new instance of <see cref="DBFilesClient.NET.StorageBase&lt;T&gt;"/> class.
+        /// Initializes a new instance of <see cref="DBFilesClient.NET.Storage&lt;T&gt;"/> class.
         /// </summary>
-        public StorageBase()
+        public Storage()
         {
             m_entryType = typeof(T);
             m_entryTypeName = m_entryType.Name;
@@ -440,9 +522,9 @@ namespace DBFilesClient.NET
             if (max < min)
                 throw new ArgumentOutOfRangeException("max");
 
-            if (m_entries == null)
+            if (m_entries == null || max == 0)
             {
-                m_entries = new T[max - min + 1];
+                m_entries = max - min > 0 ? new T[max - min + 1] : null;
                 m_minId = min;
                 m_maxId = max;
                 return;
@@ -456,9 +538,9 @@ namespace DBFilesClient.NET
             int count = (int)(m_maxId - m_minId + 1);
 
             var oldEntries = m_entries;
-            m_entries = new T[max - min + 1];
-            m_maxId = max;
-            m_minId = min;
+            m_maxId = Math.Max(m_maxId, max);
+            m_minId = Math.Min(m_minId, min);
+            m_entries = new T[m_maxId - m_minId + 1];
 
             Array.Copy(oldEntries, 0, m_entries, index, count);
         }
@@ -627,7 +709,8 @@ namespace DBFilesClient.NET
 
         public KeyCollection Keys { get { return new KeyCollection(this); } }
         ICollection<uint> IDictionary<uint, T>.Keys { get { return this.Keys; } }
-        public StorageBase<T> Values { get { return this; } }
+        public ValueCollection Values { get { return new ValueCollection(this); } }
+        public ValueCollection Records { get { return new ValueCollection(this); } }
         ICollection<T> IDictionary<uint, T>.Values { get { return this.Values; } }
 
         public bool IsReadOnly { get { return false; } }
