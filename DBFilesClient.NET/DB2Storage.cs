@@ -49,7 +49,7 @@ namespace DBFilesClient.NET
                             int diff;
                             checked
                             {
-                                diff = (int)(extHeader->MaxId - extHeader->MinId + 1);
+                                diff = (int)(extHeader->MaxId - extHeader->MinId + 1) * 6;
                             }
 
                             if (stream.CanSeek)
