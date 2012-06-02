@@ -6,7 +6,7 @@ using System.Text;
 namespace DBFilesClient.NET
 {
     /// <summary>
-    /// Controls how the property is used by storage.
+    /// Controls how the field is used by storage.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field)]
     public sealed class StoragePresenceAttribute : Attribute

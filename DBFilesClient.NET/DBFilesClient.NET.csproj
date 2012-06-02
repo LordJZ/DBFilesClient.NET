@@ -68,10 +68,10 @@
     <Compile Include="DBCHeader.cs" />
     <Compile Include="LoadFlags.cs" />
     <Compile Include="DBCStorage.cs" />
+    <Compile Include="Storage.cs" />
     <Compile Include="StoragePresenceAttribute.cs" />
     <Compile Include="StoragePresenceOption.cs" />
     <Compile Include="StoredTypeId.cs" />
-    <Compile Include="IStorage.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup />
