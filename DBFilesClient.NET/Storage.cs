@@ -394,10 +394,12 @@ namespace DBFilesClient.NET
         internal struct EntryFieldInfo
         {
             public FieldInfo FieldInfo;
-            public StoredTypeId TypeId;
-            public PropertyInfo Property;
             public MethodInfo Getter;
             public MethodInfo Setter;
+
+            // Only used by arrays.
+            public Type ElementType;
+            public StoredTypeId DBCTypeId;
             public int ArraySize;
         }
 
@@ -477,7 +479,7 @@ namespace DBFilesClient.NET
             else
                 throw new InvalidOperationException();
 
-            if (m_fields[0].TypeId != StoredTypeId.UInt32)
+            if (m_fields[0].DBCTypeId != StoredTypeId.UInt32)
                 ilgen.Emit(OpCodes.Conv_U4);
             ilgen.Emit(OpCodes.Ret);
 

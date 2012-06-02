@@ -40,12 +40,7 @@ namespace DBFilesClient.NET
                 var field = fields[i].Key;
                 var fieldName = field.Name;
 
-                var type = field.FieldType;
-                if (type.IsEnum)
-                    type = type.GetEnumUnderlyingType();
-
-                if (i == 0 && type != s_intType && type != s_uintType)
-                    throw new InvalidOperationException("First field of type " + m_entryTypeName + " must be Int32 or UInt32.");
+                Type type;
 
                 if (attr != null && attr.Option == StoragePresenceOption.UseProperty)
                 {
@@ -56,12 +51,9 @@ namespace DBFilesClient.NET
                         throw new InvalidOperationException("Property " + propertyName + " for field " + fieldName
                             + " of class " + m_entryTypeName + " cannot be found.");
 
-                    if (property.PropertyType != field.FieldType)
-                        throw new InvalidOperationException("Property " + propertyName + " and field " + fieldName
-                            + " of class " + m_entryTypeName + " must be of same types.");
+                    type = property.PropertyType;
 
-                    m_fields[i].Property = property;
-                    foreach (var accessor in property.GetAccessors())
+                    foreach (var accessor in property.GetAccessors(false))
                     {
                         if (accessor.ReturnType == field.FieldType)
                             m_fields[i].Getter = accessor;
@@ -79,6 +71,7 @@ namespace DBFilesClient.NET
                     }
 
                     m_fields[i].FieldInfo = field;
+                    type = field.FieldType;
                 }
 
                 int elementCount = 1;
@@ -95,34 +88,39 @@ namespace DBFilesClient.NET
                             + fieldName + " of type " + m_entryTypeName + ".");
 
                     m_fields[i].ArraySize = elementCount = attr.ArraySize;
-
-                    type = type.GetElementType();
+                    m_fields[i].ElementType = type = type.GetElementType();
                 }
+
+                if (type.IsEnum)
+                    type = type.GetEnumUnderlyingType();
+
+                if (i == 0 && type != s_intType && type != s_uintType)
+                    throw new InvalidOperationException("First field of type " + m_entryTypeName + " must be Int32 or UInt32.");
 
                 if (type == s_intType)
                 {
-                    m_fields[i].TypeId = StoredTypeId.Int32;
+                    m_fields[i].DBCTypeId = StoredTypeId.Int32;
                     m_entrySize += 4 * elementCount;
                 }
                 else if (type == s_uintType)
                 {
-                    m_fields[i].TypeId = StoredTypeId.UInt32;
+                    m_fields[i].DBCTypeId = StoredTypeId.UInt32;
                     m_entrySize += 4 * elementCount;
                 }
                 else if (type == s_floatType)
                 {
-                    m_fields[i].TypeId = StoredTypeId.Single;
+                    m_fields[i].DBCTypeId = StoredTypeId.Single;
                     m_entrySize += 4 * elementCount;
                 }
                 else if (type == s_stringType)
                 {
-                    m_fields[i].TypeId = StoredTypeId.String;
+                    m_fields[i].DBCTypeId = StoredTypeId.String;
                     m_entrySize += 4 * elementCount;
                     m_haveString = true;
                 }
                 else if (type == s_lazyCStringType)
                 {
-                    m_fields[i].TypeId = StoredTypeId.LazyCString;
+                    m_fields[i].DBCTypeId = StoredTypeId.LazyCString;
                     m_entrySize += 4 * elementCount;
                     m_haveLazyCString = true;
                 }
@@ -226,10 +224,13 @@ namespace DBFilesClient.NET
             }
         }
 
-        internal void EmitArray(ILGenerator ilgen, Type type, StoredTypeId id, int count, Action<bool> elementGen, bool lastField)
+        internal void EmitArray(ILGenerator ilgen, ref EntryFieldInfo info, bool lastField)
         {
+            var count = info.ArraySize;
+            var elemType = info.ElementType;
+
             EmitLoadImm(ilgen, count);
-            ilgen.Emit(OpCodes.Newarr, type);
+            ilgen.Emit(OpCodes.Newarr, elemType);
 
             for (int i = 0; i < count; ++i)
             {
@@ -238,56 +239,31 @@ namespace DBFilesClient.NET
                 ilgen.Emit(OpCodes.Dup);
                 EmitLoadImm(ilgen, i);
 
+                var id = info.DBCTypeId;
                 switch (id)
                 {
                     case StoredTypeId.Int32:
                     case StoredTypeId.UInt32:
-                        elementGen(last);
+                        EmitLoadOnStackTop(ilgen, id, last);
                         ilgen.Emit(OpCodes.Stelem_I4);
                         break;
                     case StoredTypeId.Single:
-                        elementGen(last);
+                        EmitLoadOnStackTop(ilgen, id, last);
                         ilgen.Emit(OpCodes.Stelem_R4);
                         break;
                     case StoredTypeId.String:
-                        elementGen(last);
+                        EmitLoadOnStackTop(ilgen, id, last);
                         ilgen.Emit(OpCodes.Stelem_Ref);
                         break;
                     case StoredTypeId.LazyCString:
-                        ilgen.Emit(OpCodes.Ldelema, type);
-                        elementGen(last);
-                        ilgen.Emit(OpCodes.Stobj, type);
+                        ilgen.Emit(OpCodes.Ldelema, elemType);
+                        EmitLoadOnStackTop(ilgen, id, last);
+                        ilgen.Emit(OpCodes.Stobj, elemType);
                         break;
                     default:
                         throw new InvalidOperationException();
                 }
             }
-        }
-
-        internal void EmitLoadField(ILGenerator ilgen, FieldInfo field, StoredTypeId id, bool lastField, int arraySize)
-        {
-            //             0            1            2             3           4
-            // args: byte* data, byte[] pool, sbyte* pinnedPool, T entry, bool ignoreLazyCStrings
-
-            ilgen.Emit(OpCodes.Ldarg_3);
-            if (arraySize > 0)
-                EmitArray(ilgen, field.FieldType.GetElementType(), id, arraySize, last => EmitLoadOnStackTop(ilgen, id, last), lastField);
-            else
-                EmitLoadOnStackTop(ilgen, id, lastField);
-            ilgen.Emit(OpCodes.Stfld, field);
-        }
-
-        internal void EmitLoadProperty(ILGenerator ilgen, PropertyInfo property, MethodInfo setter, StoredTypeId id, bool lastField, int arraySize)
-        {
-            //             0            1            2             3           4
-            // args: byte* data, byte[] pool, sbyte* pinnedPool, T entry, bool ignoreLazyCStrings
-
-            ilgen.Emit(OpCodes.Ldarg_3);
-            if (arraySize > 0)
-                EmitArray(ilgen, property.PropertyType.GetElementType(), id, arraySize, last => EmitLoadOnStackTop(ilgen, id, last), lastField);
-            else
-                EmitLoadOnStackTop(ilgen, id, lastField);
-            ilgen.Emit(OpCodes.Callvirt, setter);
         }
 
         internal void GenerateLoadMethod()
@@ -314,23 +290,33 @@ namespace DBFilesClient.NET
             for (int i = 0; i < fieldCount; i++)
             {
                 var lastField = i + 1 >= fieldCount;
-                var id = m_fields[i].TypeId;
                 var fieldInfo = m_fields[i].FieldInfo;
-                var propertyInfo = m_fields[i].Property;
+
+                //             0            1            2             3           4
+                // args: byte* data, byte[] pool, sbyte* pinnedPool, T entry, bool ignoreLazyCStrings
+
+                ilgen.Emit(OpCodes.Ldarg_3);
+
+                int arraySize = m_fields[i].ArraySize;
+                if (arraySize > 0)
+                    EmitArray(ilgen, ref m_fields[i], lastField);
+                else
+                    EmitLoadOnStackTop(ilgen, m_fields[i].DBCTypeId, lastField);
 
                 if (fieldInfo != null)
-                    EmitLoadField(ilgen, fieldInfo, id, lastField, m_fields[i].ArraySize);
-                else if (propertyInfo != null)
                 {
-                    var setter = m_fields[i].Setter;
-                    if (setter != null)
-                        EmitLoadProperty(ilgen, propertyInfo, setter, id, lastField, m_fields[i].ArraySize);
-                    else
-                        throw new InvalidOperationException(
-                            "Setter of property " + propertyInfo.Name + " of class " + m_entryTypeName + " is inaccessible.");
+                    ilgen.Emit(OpCodes.Stfld, fieldInfo);
                 }
                 else
-                    throw new InvalidOperationException("Invalid field " + i + " in class " + m_entryTypeName + ".");
+                {
+                    var setter = m_fields[i].Setter;
+                    if (setter == null)
+                        throw new InvalidOperationException(
+                            "Setter of property " + i + " of class " + m_entryTypeName + " is inaccessible.");
+
+                    ilgen.Emit(OpCodes.Callvirt, setter);
+                    ilgen.Emit(OpCodes.Nop);
+                }
             }
 
             ilgen.Emit(OpCodes.Ret);
