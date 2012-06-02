@@ -12,6 +12,7 @@ namespace DBFilesClient.NET
 
         public StoragePresenceOption Option { get; private set; }
         public string PropertyName { get; set; }
+        public int ArraySize { get; set; }
 
         public StoragePresenceAttribute(StoragePresenceOption option)
         {

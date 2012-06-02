@@ -81,31 +81,49 @@ namespace DBFilesClient.NET
                     m_fields[i].FieldInfo = field;
                 }
 
+                int elementCount = 1;
+
+                if (type.IsArray)
+                {
+                    if (type.GetArrayRank() != 1)
+                        throw new InvalidOperationException(
+                            "Field " + fieldName + " of type " + m_entryTypeName + " cannot be a multi-dimensional array.");
+
+                    if (attr == null || attr.ArraySize < 1)
+                        throw new InvalidOperationException(
+                            "Use " + typeof(StoragePresenceAttribute).Name + " to set number of elements of field "
+                            + fieldName + " of type " + m_entryTypeName + ".");
+
+                    m_fields[i].ArraySize = elementCount = attr.ArraySize;
+
+                    type = type.GetElementType();
+                }
+
                 if (type == s_intType)
                 {
                     m_fields[i].TypeId = StoredTypeId.Int32;
-                    m_entrySize += 4;
+                    m_entrySize += 4 * elementCount;
                 }
                 else if (type == s_uintType)
                 {
                     m_fields[i].TypeId = StoredTypeId.UInt32;
-                    m_entrySize += 4;
+                    m_entrySize += 4 * elementCount;
                 }
                 else if (type == s_floatType)
                 {
                     m_fields[i].TypeId = StoredTypeId.Single;
-                    m_entrySize += 4;
+                    m_entrySize += 4 * elementCount;
                 }
                 else if (type == s_stringType)
                 {
                     m_fields[i].TypeId = StoredTypeId.String;
-                    m_entrySize += 4;
+                    m_entrySize += 4 * elementCount;
                     m_haveString = true;
                 }
                 else if (type == s_lazyCStringType)
                 {
                     m_fields[i].TypeId = StoredTypeId.LazyCString;
-                    m_entrySize += 4;
+                    m_entrySize += 4 * elementCount;
                     m_haveLazyCString = true;
                 }
                 else
@@ -119,7 +137,7 @@ namespace DBFilesClient.NET
         #endregion
 
         #region Generating Methods
-        internal void EmitLoadField(ILGenerator ilgen, FieldInfo field, StoredTypeId id, bool lastField)
+        internal void EmitLoadOnStackTop(ILGenerator ilgen, StoredTypeId id, bool lastField)
         {
             //             0            1            2             3           4
             // args: byte* data, byte[] pool, sbyte* pinnedPool, T entry, bool ignoreLazyCStrings
@@ -127,54 +145,44 @@ namespace DBFilesClient.NET
             switch (id)
             {
                 case StoredTypeId.Int32:
-                    ilgen.Emit(OpCodes.Ldarg_3);                            // stack = entry
-                    ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data, entry
-                    ilgen.Emit(OpCodes.Ldind_I4);                           // stack = *(int*)data, entry
-                    ilgen.Emit(OpCodes.Stfld, field);                       // stack =
+                    ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data
+                    ilgen.Emit(OpCodes.Ldind_I4);                           // stack = *(int*)data
                     break;
                 case StoredTypeId.UInt32:
-                    ilgen.Emit(OpCodes.Ldarg_3);                            // stack = entry
-                    ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data, entry
-                    ilgen.Emit(OpCodes.Ldind_U4);                           // stack = *(uint*)data, entry
-                    ilgen.Emit(OpCodes.Stfld, field);                       // stack =
+                    ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data
+                    ilgen.Emit(OpCodes.Ldind_U4);                           // stack = *(uint*)data
                     break;
                 case StoredTypeId.Single:
-                    ilgen.Emit(OpCodes.Ldarg_3);                            // stack = entry
-                    ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data, entry
-                    ilgen.Emit(OpCodes.Ldind_R4);                           // stack = *(float*)data, entry
-                    ilgen.Emit(OpCodes.Stfld, field);                       // stack =
+                    ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data
+                    ilgen.Emit(OpCodes.Ldind_R4);                           // stack = *(float*)data
                     break;
                 case StoredTypeId.String:
-                    ilgen.Emit(OpCodes.Ldarg_3);                            // stack = entry
-                    ilgen.Emit(OpCodes.Ldarg_2);                            // stack = pinnedPool, entry
-                    ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data, pinnedPool, entry
-                    ilgen.Emit(OpCodes.Ldind_I4);                           // stack = *(int*)data, pinnedPool, entry
-                    ilgen.Emit(OpCodes.Conv_I);                             // stack = (IntPtr)*(int*)data, pinnedPool, entry
-                    ilgen.Emit(OpCodes.Add);                                // stack = pinnedPool+*(int*)data, entry
-                    ilgen.Emit(OpCodes.Newobj, s_stringCtor);               // stack = string, entry
-                    ilgen.Emit(OpCodes.Stfld, field);                       // stack =
+                    ilgen.Emit(OpCodes.Ldarg_2);                            // stack = pinnedPool
+                    ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data, pinnedPool
+                    ilgen.Emit(OpCodes.Ldind_I4);                           // stack = *(int*)data, pinnedPool
+                    ilgen.Emit(OpCodes.Conv_I);                             // stack = (IntPtr)*(int*)data, pinnedPool
+                    ilgen.Emit(OpCodes.Add);                                // stack = pinnedPool+*(int*)data
+                    ilgen.Emit(OpCodes.Newobj, s_stringCtor);               // stack = string
                     break;
                 case StoredTypeId.LazyCString:
                     ilgen.Emit(OpCodes.Ldloca_S, 0);                        // stack = &lazyCString
                     ilgen.Emit(OpCodes.Ldarg_1);                            // stack = pool, &lazyCString
                     ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data, pool, &lazyCString
                     ilgen.Emit(OpCodes.Ldind_I4);                           // stack = *(int*)data, pool, &lazyCString
-                    ilgen.Emit(OpCodes.Call, s_lazyCStringCtor);           // stack =
+                    ilgen.Emit(OpCodes.Call, s_lazyCStringCtor);            // stack =
                     ilgen.Emit(OpCodes.Ldarg_S, 4);                         // stack = ignoreLazyCStrings
                     var label = ilgen.DefineLabel();
                     ilgen.Emit(OpCodes.Brfalse, label);                     // stack =
                     ilgen.Emit(OpCodes.Ldloca_S, 0);                        // stack = &lazyCString
-                    ilgen.Emit(OpCodes.Call, LazyCString.LoadStringInfo); // stack =
+                    ilgen.Emit(OpCodes.Call, LazyCString.LoadStringInfo);   // stack =
                     ilgen.MarkLabel(label);
-                    ilgen.Emit(OpCodes.Ldarg_3);                            // stack = entry
-                    ilgen.Emit(OpCodes.Ldloc_0);                            // stack = lazyCString, entry
-                    ilgen.Emit(OpCodes.Stfld, field);                       // stack =
+                    ilgen.Emit(OpCodes.Ldloc_0);                            // stack = lazyCString
                     break;
                 default:
                     throw new InvalidOperationException();
             }
 
-            //if (!lastField)
+            if (!lastField)
             {
                 ilgen.Emit(OpCodes.Ldarg_0);            // stack = data
                 ilgen.Emit(OpCodes.Ldc_I4_4);           // stack = 4, data
@@ -184,74 +192,102 @@ namespace DBFilesClient.NET
             }
         }
 
-        internal void EmitLoadProperty(ILGenerator ilgen, PropertyInfo property, MethodInfo setter, StoredTypeId id, bool lastField)
+        internal void EmitLoadImm(ILGenerator ilgen, int value)
+        {
+            switch (value)
+            {
+                case 1:
+                    ilgen.Emit(OpCodes.Ldc_I4_1);
+                    break;
+                case 2:
+                    ilgen.Emit(OpCodes.Ldc_I4_2);
+                    break;
+                case 3:
+                    ilgen.Emit(OpCodes.Ldc_I4_3);
+                    break;
+                case 4:
+                    ilgen.Emit(OpCodes.Ldc_I4_4);
+                    break;
+                case 5:
+                    ilgen.Emit(OpCodes.Ldc_I4_5);
+                    break;
+                case 6:
+                    ilgen.Emit(OpCodes.Ldc_I4_6);
+                    break;
+                case 7:
+                    ilgen.Emit(OpCodes.Ldc_I4_7);
+                    break;
+                case 8:
+                    ilgen.Emit(OpCodes.Ldc_I4_8);
+                    break;
+                default:
+                    ilgen.Emit(OpCodes.Ldc_I4, value);
+                    break;
+            }
+        }
+
+        internal void EmitArray(ILGenerator ilgen, Type type, StoredTypeId id, int count, Action<bool> elementGen, bool lastField)
+        {
+            EmitLoadImm(ilgen, count);
+            ilgen.Emit(OpCodes.Newarr, type);
+
+            for (int i = 0; i < count; ++i)
+            {
+                bool last = lastField && i + 1 >= count;
+
+                ilgen.Emit(OpCodes.Dup);
+                EmitLoadImm(ilgen, i);
+
+                switch (id)
+                {
+                    case StoredTypeId.Int32:
+                    case StoredTypeId.UInt32:
+                        elementGen(last);
+                        ilgen.Emit(OpCodes.Stelem_I4);
+                        break;
+                    case StoredTypeId.Single:
+                        elementGen(last);
+                        ilgen.Emit(OpCodes.Stelem_R4);
+                        break;
+                    case StoredTypeId.String:
+                        elementGen(last);
+                        ilgen.Emit(OpCodes.Stelem_Ref);
+                        break;
+                    case StoredTypeId.LazyCString:
+                        ilgen.Emit(OpCodes.Ldelema, type);
+                        elementGen(last);
+                        ilgen.Emit(OpCodes.Stobj, type);
+                        break;
+                    default:
+                        throw new InvalidOperationException();
+                }
+            }
+        }
+
+        internal void EmitLoadField(ILGenerator ilgen, FieldInfo field, StoredTypeId id, bool lastField, int arraySize)
         {
             //             0            1            2             3           4
             // args: byte* data, byte[] pool, sbyte* pinnedPool, T entry, bool ignoreLazyCStrings
 
-            switch (id)
-            {
-                case StoredTypeId.Int32:
-                    ilgen.Emit(OpCodes.Ldarg_3);                            // stack = entry
-                    ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data, entry
-                    ilgen.Emit(OpCodes.Ldind_I4);                           // stack = *(int*)data, entry
-                    ilgen.Emit(OpCodes.Callvirt, setter);                   // stack =
-                    ilgen.Emit(OpCodes.Nop);                                //
-                    break;
-                case StoredTypeId.UInt32:
-                    ilgen.Emit(OpCodes.Ldarg_3);                            // stack = entry
-                    ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data, entry
-                    ilgen.Emit(OpCodes.Ldind_U4);                           // stack = *(uint*)data, entry
-                    ilgen.Emit(OpCodes.Callvirt, setter);                   // stack =
-                    ilgen.Emit(OpCodes.Nop);                                //
-                    break;
-                case StoredTypeId.Single:
-                    ilgen.Emit(OpCodes.Ldarg_3);                            // stack = entry
-                    ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data, entry
-                    ilgen.Emit(OpCodes.Ldind_R4);                           // stack = *(float*)data, entry
-                    ilgen.Emit(OpCodes.Callvirt, setter);                   // stack =
-                    ilgen.Emit(OpCodes.Nop);                                //
-                    break;
-                case StoredTypeId.String:
-                    ilgen.Emit(OpCodes.Ldarg_3);                            // stack = entry
-                    ilgen.Emit(OpCodes.Ldarg_2);                            // stack = pinnedPool, entry
-                    ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data, pinnedPool, entry
-                    ilgen.Emit(OpCodes.Ldind_I4);                           // stack = *(int*)data, pinnedPool, entry
-                    ilgen.Emit(OpCodes.Conv_I);                             // stack = (IntPtr)*(int*)data, pinnedPool, entry
-                    ilgen.Emit(OpCodes.Add);                                // stack = pinnedPool+*(int*)data, entry
-                    ilgen.Emit(OpCodes.Newobj, s_stringCtor);               // stack = string, entry
-                    ilgen.Emit(OpCodes.Callvirt, setter);                   // stack =
-                    ilgen.Emit(OpCodes.Nop);                                //
-                    break;
-                case StoredTypeId.LazyCString:
-                    ilgen.Emit(OpCodes.Ldloca_S, 0);                        // stack = &lazyCString
-                    ilgen.Emit(OpCodes.Ldarg_1);                            // stack = pool, &lazyCString
-                    ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data, pool, &lazyCString
-                    ilgen.Emit(OpCodes.Ldind_I4);                           // stack = *(int*)data, pool, &lazyCString
-                    ilgen.Emit(OpCodes.Call, s_lazyCStringCtor);           // stack =
-                    ilgen.Emit(OpCodes.Ldarg_S, 4);                         // stack = ignoreLazyCStrings
-                    var label = ilgen.DefineLabel();
-                    ilgen.Emit(OpCodes.Brfalse, label);                     // stack =
-                    ilgen.Emit(OpCodes.Ldloca_S, 0);                        // stack = &lazyCString
-                    ilgen.Emit(OpCodes.Call, LazyCString.LoadStringInfo); // stack =
-                    ilgen.MarkLabel(label);
-                    ilgen.Emit(OpCodes.Ldarg_3);                            // stack = entry
-                    ilgen.Emit(OpCodes.Ldloc_0);                            // stack = lazyCString, entry
-                    ilgen.Emit(OpCodes.Callvirt, setter);                   // stack =
-                    ilgen.Emit(OpCodes.Nop);                                //
-                    break;
-                default:
-                    throw new InvalidOperationException();
-            }
+            ilgen.Emit(OpCodes.Ldarg_3);
+            if (arraySize > 0)
+                EmitArray(ilgen, field.FieldType.GetElementType(), id, arraySize, last => EmitLoadOnStackTop(ilgen, id, last), lastField);
+            else
+                EmitLoadOnStackTop(ilgen, id, lastField);
+            ilgen.Emit(OpCodes.Stfld, field);
+        }
 
-            //if (!lastField)
-            {
-                ilgen.Emit(OpCodes.Ldarg_0);            // stack = data
-                ilgen.Emit(OpCodes.Ldc_I4_4);           // stack = 4, data
-                ilgen.Emit(OpCodes.Conv_I);             // stack = (IntPtr)4, data
-                ilgen.Emit(OpCodes.Add);                // stack = data+4
-                ilgen.Emit(OpCodes.Starg_S, 0);         // stack =
-            }
+        internal void EmitLoadProperty(ILGenerator ilgen, PropertyInfo property, MethodInfo setter, StoredTypeId id, bool lastField, int arraySize)
+        {
+            //             0            1            2             3           4
+            // args: byte* data, byte[] pool, sbyte* pinnedPool, T entry, bool ignoreLazyCStrings
+
+            ilgen.Emit(OpCodes.Ldarg_3);
+            if (arraySize > 0)
+                EmitArray(ilgen, property.PropertyType.GetElementType(), id, arraySize, last => EmitLoadOnStackTop(ilgen, id, last), lastField);
+            else
+                EmitLoadOnStackTop(ilgen, id, lastField);
+            ilgen.Emit(OpCodes.Callvirt, setter);
         }
 
         internal void GenerateLoadMethod()
@@ -260,7 +296,7 @@ namespace DBFilesClient.NET
                 return;
 
             var method = new DynamicMethod(
-                "EntryLoader-" + m_entryTypeName,
+                "EntryLoader_" + m_entryTypeName,
                 typeof(void),
                 new Type[] { typeof(byte*), typeof(byte[]), typeof(sbyte*), typeof(T), typeof(bool) },
                 typeof(T).Module
@@ -283,12 +319,12 @@ namespace DBFilesClient.NET
                 var propertyInfo = m_fields[i].Property;
 
                 if (fieldInfo != null)
-                    EmitLoadField(ilgen, fieldInfo, id, lastField);
+                    EmitLoadField(ilgen, fieldInfo, id, lastField, m_fields[i].ArraySize);
                 else if (propertyInfo != null)
                 {
                     var setter = m_fields[i].Setter;
                     if (setter != null)
-                        EmitLoadProperty(ilgen, propertyInfo, setter, id, lastField);
+                        EmitLoadProperty(ilgen, propertyInfo, setter, id, lastField, m_fields[i].ArraySize);
                     else
                         throw new InvalidOperationException(
                             "Setter of property " + propertyInfo.Name + " of class " + m_entryTypeName + " is inaccessible.");

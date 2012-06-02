@@ -398,6 +398,7 @@ namespace DBFilesClient.NET
             public PropertyInfo Property;
             public MethodInfo Getter;
             public MethodInfo Setter;
+            public int ArraySize;
         }
 
         internal EntryFieldInfo[] m_fields;
