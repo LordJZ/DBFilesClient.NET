@@ -288,8 +288,6 @@ namespace DBFilesClient.NET
         }
         #endregion
 
-        internal delegate uint IdGetter(T entry);
-
         #region Static Fields
         internal static readonly Type s_intType = typeof(int);
         internal static readonly Type s_uintType = typeof(uint);
@@ -306,6 +304,7 @@ namespace DBFilesClient.NET
         internal uint m_minId;
         internal uint m_maxId;
         internal int m_records;
+        internal delegate uint IdGetter(T entry);
         internal IdGetter m_idGetter;
         internal Type m_entryType;
         internal string m_entryTypeName;
@@ -684,6 +683,7 @@ namespace DBFilesClient.NET
         }
         #endregion
 
+        #region Loading & Saving
         /// <summary>
         /// Loads the storage from a <see cref="System.IO.Stream"/>.
         /// </summary>
@@ -691,5 +691,6 @@ namespace DBFilesClient.NET
         /// The <see cref="System.IO.Stream"/> from which the storage should be loaded.
         /// </param>
         public abstract void Load(Stream stream);
+        #endregion
     }
 }

@@ -8,13 +8,12 @@ namespace DBFilesClient.NET
 {
     public sealed class DBCStorage<T> : StorageBase<T> where T : class, new()
     {
-        unsafe delegate void EntryLoader(byte* data, byte[] pool, sbyte* pinnedPool, T entry, bool ignoreLazyCStrings);
-
         #region Loading Information
         ConstructorInfo m_ctor;
         bool m_haveString;
         bool m_haveLazyCString;
 
+        unsafe delegate void EntryLoader(byte* data, byte[] pool, sbyte* pinnedPool, T entry, bool ignoreLazyCStrings);
         EntryLoader m_loadMethod;
         #endregion
 
@@ -304,6 +303,12 @@ namespace DBFilesClient.NET
         #endregion
 
         #region Loading
+        /// <summary>
+        /// Loads the storage from a <see cref="System.IO.Stream"/>.
+        /// </summary>
+        /// <param name="stream">
+        /// The <see cref="System.IO.Stream"/> from which the storage should be loaded.
+        /// </param>
         public override void Load(Stream stream)
         {
             Load(stream, LoadFlags.None);
