@@ -64,16 +64,15 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="CString.cs" />
-    <Compile Include="DBCMetaInfo.cs" />
+    <Compile Include="LazyCString.cs" />
+    <Compile Include="DBCHeader.cs" />
+    <Compile Include="LoadFlags.cs" />
     <Compile Include="DBCStorage.cs" />
-    <Compile Include="IntPtrComparer.cs" />
+    <Compile Include="StoragePresenceAttribute.cs" />
+    <Compile Include="StoragePresenceOption.cs" />
+    <Compile Include="StoredTypeId.cs" />
     <Compile Include="IStorage.cs" />
-    <Compile Include="AlignedPointerOrUInt32.cs" />
-    <Compile Include="IStorageExtensions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Structure\EntryLayout.cs" />
-    <Compile Include="Structure\LayoutElement.cs" />
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
