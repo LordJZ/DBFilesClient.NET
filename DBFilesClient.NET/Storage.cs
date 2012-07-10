@@ -374,6 +374,8 @@ namespace DBFilesClient.NET
         internal static readonly Type s_intType = typeof(int);
         internal static readonly Type s_uintType = typeof(uint);
         internal static readonly Type s_floatType = typeof(float);
+        internal static readonly Type s_longType = typeof(long);
+        internal static readonly Type s_ulongType = typeof(ulong);
         internal static readonly Type s_stringType = typeof(string);
         internal static readonly Type s_lazyCStringType = typeof(LazyCString);
         internal static readonly ConstructorInfo s_stringCtor = typeof(string).GetConstructor(new[] { typeof(sbyte*) });

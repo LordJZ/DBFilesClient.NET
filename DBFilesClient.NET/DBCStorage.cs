@@ -112,6 +112,16 @@ namespace DBFilesClient.NET
                     m_fields[i].DBCTypeId = StoredTypeId.Single;
                     m_entrySize += 4 * elementCount;
                 }
+                else if (type == s_longType)
+                {
+                    m_fields[i].DBCTypeId = StoredTypeId.Int64;
+                    m_entrySize += 8 * elementCount;
+                }
+                else if (type == s_ulongType)
+                {
+                    m_fields[i].DBCTypeId = StoredTypeId.UInt64;
+                    m_entrySize += 8 * elementCount;
+                }
                 else if (type == s_stringType)
                 {
                     m_fields[i].DBCTypeId = StoredTypeId.String;
@@ -149,6 +159,11 @@ namespace DBFilesClient.NET
                 case StoredTypeId.UInt32:
                     ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data
                     ilgen.Emit(OpCodes.Ldind_U4);                           // stack = *(uint*)data
+                    break;
+                case StoredTypeId.UInt64:
+                case StoredTypeId.Int64:
+                    ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data
+                    ilgen.Emit(OpCodes.Ldind_I8);                           // stack = *(long*)data
                     break;
                 case StoredTypeId.Single:
                     ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data
@@ -246,6 +261,11 @@ namespace DBFilesClient.NET
                     case StoredTypeId.UInt32:
                         EmitLoadOnStackTop(ilgen, id, last);
                         ilgen.Emit(OpCodes.Stelem_I4);
+                        break;
+                    case StoredTypeId.Int64:
+                    case StoredTypeId.UInt64:
+                        EmitLoadOnStackTop(ilgen, id, last);
+                        ilgen.Emit(OpCodes.Stelem_I8);
                         break;
                     case StoredTypeId.Single:
                         EmitLoadOnStackTop(ilgen, id, last);
