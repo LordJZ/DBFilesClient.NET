@@ -150,6 +150,8 @@ namespace DBFilesClient.NET
             //             0            1            2             3           4
             // args: byte* data, byte[] pool, sbyte* pinnedPool, T entry, bool ignoreLazyCStrings
 
+            int size = 4;
+
             switch (id)
             {
                 case StoredTypeId.Int32:
@@ -162,6 +164,7 @@ namespace DBFilesClient.NET
                     break;
                 case StoredTypeId.UInt64:
                 case StoredTypeId.Int64:
+                    size = 8;
                     ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data
                     ilgen.Emit(OpCodes.Ldind_I8);                           // stack = *(long*)data
                     break;
@@ -198,9 +201,9 @@ namespace DBFilesClient.NET
             if (!lastField)
             {
                 ilgen.Emit(OpCodes.Ldarg_0);            // stack = data
-                ilgen.Emit(OpCodes.Ldc_I4_4);           // stack = 4, data
-                ilgen.Emit(OpCodes.Conv_I);             // stack = (IntPtr)4, data
-                ilgen.Emit(OpCodes.Add);                // stack = data+4
+                EmitLoadImm(ilgen, size);               // stack = size, data
+                ilgen.Emit(OpCodes.Conv_I);             // stack = (IntPtr)size, data
+                ilgen.Emit(OpCodes.Add);                // stack = data+size
                 ilgen.Emit(OpCodes.Starg_S, 0);         // stack =
             }
         }
