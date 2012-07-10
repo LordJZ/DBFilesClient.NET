@@ -409,7 +409,24 @@ namespace DBFilesClient.NET
                 byte* pdata = pdata_;
 
                 if (m_records > 0)
-                    this.Resize(*(uint*)pdata, *(uint*)(pdata + m_entrySize * (m_records - 1)));
+                {
+                    uint minId = uint.MaxValue;
+                    uint maxId = uint.MinValue;
+                    byte* pdata2 = pdata;
+
+                    for (int i = 0; i < m_records; i++)
+                    {
+                        uint id = *(uint*)pdata2;
+
+                        if (minId > id)
+                            minId = id;
+
+                        if (maxId < id)
+                            maxId = id;
+                    }
+
+                    this.Resize(minId, maxId);
+                }
 
                 fixed (byte* ppool = m_haveString ? pool : null)
                 {
