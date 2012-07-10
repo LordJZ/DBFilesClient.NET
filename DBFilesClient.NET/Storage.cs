@@ -511,9 +511,6 @@ namespace DBFilesClient.NET
 
         internal bool CheckId(uint id)
         {
-            if (id == 0)
-                throw new ArgumentOutOfRangeException("id", "id cannot be 0.");
-
             return m_records != 0 && m_minId <= id && id <= m_maxId;
         }
 
