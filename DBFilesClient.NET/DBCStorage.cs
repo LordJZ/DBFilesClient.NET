@@ -426,6 +426,8 @@ namespace DBFilesClient.NET
 
                         if (maxId < id)
                             maxId = id;
+
+                        pdata2 += m_entrySize;
                     }
 
                     this.Resize(minId, maxId);
