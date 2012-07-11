@@ -95,23 +95,17 @@ namespace DBFilesClient.NET
                     StringGetter strGetter = offset => LazyCString.LoadString(spool, poolLen, offset);
 
                     bool ignoreLazyCStrings = !flags.HasFlag(LoadFlags.LazyCStrings);
-                    try
+
+                    for (int i = 0; i < m_records; i++)
                     {
-                        for (int i = 0; i < m_records; i++)
-                        {
-                            var entry = (T)m_ctor.Invoke(null);
+                        var entry = (T)m_ctor.Invoke(null);
 
-                            m_loadMethod(pdata, pool, strGetter, entry, ignoreLazyCStrings);
+                        m_loadMethod(pdata, pool, strGetter, entry, ignoreLazyCStrings);
 
-                            uint id = *(uint*)pdata;
-                            m_entries[id - m_minId] = entry;
+                        uint id = *(uint*)pdata;
+                        m_entries[id - m_minId] = entry;
 
-                            pdata += m_entrySize;
-                        }
-                    }
-                    catch (FieldAccessException e)
-                    {
-                        throw new InvalidOperationException("Class " + m_entryTypeName + " must be public.", e);
+                        pdata += m_entrySize;
                     }
                 }
             }

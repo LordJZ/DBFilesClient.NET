@@ -467,7 +467,9 @@ namespace DBFilesClient.NET
             var method = new DynamicMethod(
                 "IdGetter_" + m_entryTypeName,
                 typeof(uint),
-                new Type[] { typeof(T) }
+                new Type[] { typeof(T) },
+                typeof(T),
+                true
                 );
 
             var ilgen = method.GetILGenerator(20);

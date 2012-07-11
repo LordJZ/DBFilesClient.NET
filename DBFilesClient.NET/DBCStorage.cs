@@ -66,13 +66,6 @@ namespace DBFilesClient.NET
                 }
                 else
                 {
-                    if (!field.IsPublic)
-                    {
-                        throw new InvalidOperationException(
-                            "Field " + fieldName + " of type " + m_entryTypeName + " must be public. "
-                            + "Use " + typeof(StoragePresenceAttribute).Name + " to exclude the field.");
-                    }
-
                     m_fields[i].FieldInfo = field;
                     type = field.FieldType;
                 }
@@ -299,7 +292,8 @@ namespace DBFilesClient.NET
                 "EntryLoader_" + m_entryTypeName,
                 typeof(void),
                 new Type[] { typeof(byte*), typeof(byte[]), typeof(StringGetter), typeof(T), typeof(bool) },
-                typeof(T).Module
+                typeof(T).Module,
+                true
                 );
 
             var fieldCount = m_fields.Length;
@@ -441,23 +435,17 @@ namespace DBFilesClient.NET
                     StringGetter strGetter = offset => LazyCString.LoadString(spool, poolLen, offset);
 
                     bool ignoreLazyCStrings = !flags.HasFlag(LoadFlags.LazyCStrings);
-                    try
+
+                    for (int i = 0; i < m_records; i++)
                     {
-                        for (int i = 0; i < m_records; i++)
-                        {
-                            var entry = (T)m_ctor.Invoke(null);
+                        var entry = (T)m_ctor.Invoke(null);
 
-                            m_loadMethod(pdata, pool, strGetter, entry, ignoreLazyCStrings);
+                        m_loadMethod(pdata, pool, strGetter, entry, ignoreLazyCStrings);
 
-                            uint id = *(uint*)pdata;
-                            m_entries[id - m_minId] = entry;
+                        uint id = *(uint*)pdata;
+                        m_entries[id - m_minId] = entry;
 
-                            pdata += m_entrySize;
-                        }
-                    }
-                    catch (FieldAccessException e)
-                    {
-                        throw new InvalidOperationException("Class " + m_entryTypeName + " must be public.", e);
+                        pdata += m_entrySize;
                     }
                 }
             }
