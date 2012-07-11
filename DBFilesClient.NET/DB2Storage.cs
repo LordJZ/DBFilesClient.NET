@@ -90,6 +90,10 @@ namespace DBFilesClient.NET
 
                 fixed (byte* ppool = m_haveString ? pool : null)
                 {
+                    sbyte* spool = (sbyte*)ppool;
+                    int poolLen = pool.Length;
+                    StringGetter strGetter = offset => LazyCString.LoadString(spool, poolLen, offset);
+
                     bool ignoreLazyCStrings = !flags.HasFlag(LoadFlags.LazyCStrings);
                     try
                     {
@@ -97,7 +101,7 @@ namespace DBFilesClient.NET
                         {
                             var entry = (T)m_ctor.Invoke(null);
 
-                            m_loadMethod(pdata, pool, (sbyte*)ppool, entry, ignoreLazyCStrings);
+                            m_loadMethod(pdata, pool, strGetter, entry, ignoreLazyCStrings);
 
                             uint id = *(uint*)pdata;
                             m_entries[id - m_minId] = entry;

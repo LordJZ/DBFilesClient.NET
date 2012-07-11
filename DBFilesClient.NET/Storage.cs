@@ -378,7 +378,6 @@ namespace DBFilesClient.NET
         internal static readonly Type s_ulongType = typeof(ulong);
         internal static readonly Type s_stringType = typeof(string);
         internal static readonly Type s_lazyCStringType = typeof(LazyCString);
-        internal static readonly ConstructorInfo s_stringCtor = typeof(string).GetConstructor(new[] { typeof(sbyte*) });
         internal static readonly ConstructorInfo s_lazyCStringCtor =
             typeof(LazyCString).GetConstructor(new[] { typeof(byte[]), typeof(int) });
         #endregion

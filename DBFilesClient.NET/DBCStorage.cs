@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -14,7 +15,9 @@ namespace DBFilesClient.NET
         internal bool m_haveString;
         internal bool m_haveLazyCString;
 
-        internal unsafe delegate void EntryLoader(byte* data, byte[] pool, sbyte* pinnedPool, T entry, bool ignoreLazyCStrings);
+        internal delegate string StringGetter(int offset);
+        internal static readonly MethodInfo s_strGetterInvoker = typeof(StringGetter).GetMethod("Invoke");
+        internal unsafe delegate void EntryLoader(byte* data, byte[] pool, StringGetter strGetter, T entry, bool ignoreLazyCStrings);
         internal EntryLoader m_loadMethod;
         #endregion
 
@@ -147,8 +150,8 @@ namespace DBFilesClient.NET
         #region Generating Methods
         internal void EmitLoadOnStackTop(ILGenerator ilgen, StoredTypeId id, bool lastField)
         {
-            //             0            1            2             3           4
-            // args: byte* data, byte[] pool, sbyte* pinnedPool, T entry, bool ignoreLazyCStrings
+            //             0            1                  2         3           4
+            // args: byte* data, byte[] pool, StringGetter strGetter, T entry, bool ignoreLazyCStrings
 
             int size = 4;
 
@@ -173,12 +176,10 @@ namespace DBFilesClient.NET
                     ilgen.Emit(OpCodes.Ldind_R4);                           // stack = *(float*)data
                     break;
                 case StoredTypeId.String:
-                    ilgen.Emit(OpCodes.Ldarg_2);                            // stack = pinnedPool
-                    ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data, pinnedPool
-                    ilgen.Emit(OpCodes.Ldind_I4);                           // stack = *(int*)data, pinnedPool
-                    ilgen.Emit(OpCodes.Conv_I);                             // stack = (IntPtr)*(int*)data, pinnedPool
-                    ilgen.Emit(OpCodes.Add);                                // stack = pinnedPool+*(int*)data
-                    ilgen.Emit(OpCodes.Newobj, s_stringCtor);               // stack = string
+                    ilgen.Emit(OpCodes.Ldarg_2);                            // stack = strGetter
+                    ilgen.Emit(OpCodes.Ldarg_0);                            // stack = data, strGetter
+                    ilgen.Emit(OpCodes.Ldind_I4);                           // stack = *(int*)data, strGetter
+                    ilgen.Emit(OpCodes.Callvirt, s_strGetterInvoker);       // stack = string
                     break;
                 case StoredTypeId.LazyCString:
                     ilgen.Emit(OpCodes.Ldloca_S, 0);                        // stack = &lazyCString
@@ -435,6 +436,10 @@ namespace DBFilesClient.NET
 
                 fixed (byte* ppool = m_haveString ? pool : null)
                 {
+                    sbyte* spool = (sbyte*)ppool;
+                    int poolLen = pool.Length;
+                    StringGetter strGetter = offset => LazyCString.LoadString(spool, poolLen, offset);
+
                     bool ignoreLazyCStrings = !flags.HasFlag(LoadFlags.LazyCStrings);
                     try
                     {
@@ -442,7 +447,7 @@ namespace DBFilesClient.NET
                         {
                             var entry = (T)m_ctor.Invoke(null);
 
-                            m_loadMethod(pdata, pool, (sbyte*)ppool, entry, ignoreLazyCStrings);
+                            m_loadMethod(pdata, pool, strGetter, entry, ignoreLazyCStrings);
 
                             uint id = *(uint*)pdata;
                             m_entries[id - m_minId] = entry;
