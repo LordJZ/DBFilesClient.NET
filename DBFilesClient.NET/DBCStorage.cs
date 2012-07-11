@@ -298,7 +298,7 @@ namespace DBFilesClient.NET
             var method = new DynamicMethod(
                 "EntryLoader_" + m_entryTypeName,
                 typeof(void),
-                new Type[] { typeof(byte*), typeof(byte[]), typeof(sbyte*), typeof(T), typeof(bool) },
+                new Type[] { typeof(byte*), typeof(byte[]), typeof(StringGetter), typeof(T), typeof(bool) },
                 typeof(T).Module
                 );
 
